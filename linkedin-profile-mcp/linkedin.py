@@ -6,7 +6,9 @@ import os
 from dotenv import load_dotenv
 from thefuzz import fuzz
 import spacy
-
+from spacy.tokens import Token
+from spacy_wordnet.wordnet_annotator import WordnetAnnotator
+Token.set_extension('wordnet', getter=lambda token: token._.get_wordnet())
 load_dotenv()
 
 # Read the RAPIDAPI_KEY from the environment variables
@@ -21,6 +23,7 @@ RAPIDAPI_HOST = "fresh-linkedin-profile-data.p.rapidapi.com"
 
 # Load spaCy model for synonym handling
 nlp = spacy.load('en_core_web_sm')
+nlp.add_pipe("spacy_wordnet", after="tagger")  # must add pipe
 
 class SearchCriteria:
     def __init__(
@@ -40,8 +43,8 @@ class SearchCriteria:
         self.company = company
         self.partial_match = partial_match
         self.min_similarity = min_similarity
-        self.synonyms = self._get_synonyms(keyword)
 
+       
     def _get_synonyms(self, text: str) -> List[str]:
         """Get synonyms using spaCy"""
         doc = nlp(text)
