@@ -6,11 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Initialize FastMCP server
+mcp = FastMCP("airtable")
+
+# Get API key from environment
 AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
 if not AIRTABLE_API_KEY:
     raise ValueError("AIRTABLE_API_KEY is not set in environment variables")
-
-mcp = FastMCP("airtable")
 
 class AirtableClient:
     def __init__(self):
@@ -24,7 +26,7 @@ class AirtableClient:
         )
         self.max_depth = 3
         self.api_base = "https://api.airtable.com/v0"
-        
+
     async def create_base(self, name: str, tables: List[Dict]) -> str:
         """Create a new Airtable base"""
         url = "https://api.airtable.com/v0/meta/bases"
@@ -46,7 +48,6 @@ class AirtableClient:
     async def insert_records(self, base_id: str, table_id: str, records: List[Dict]) -> None:
         """Insert records into a table"""
         url = f"{self.api_base}/{base_id}/{table_id}"
-        # Batch records in groups of 10 (Airtable limit)
         for i in range(0, len(records), 10):
             batch = records[i:i+10]
             payload = {"records": batch}
@@ -63,11 +64,9 @@ class AirtableClient:
             response.raise_for_status()
             data = response.json()
 
-            # Extract schema and records
             schema = self._extract_schema(data)
             records = data.get("records", [])
 
-            # Process nested Airtable links
             for record in records:
                 for field, value in record.get("fields", {}).items():
                     if isinstance(value, str) and "airtable.com" in value:
@@ -112,24 +111,21 @@ async def clone_shared_view_to_base(url: str, base_name: str) -> str:
     """Clone an Airtable shared view into a new base with full structure.
     
     Args:
-        url: Airtable shared view URL
-        base_name: Name for the new base
+        url: Airtable shared view URL (e.g., https://airtable.com/app.../share.../table...)
+        base_name: Name for the new base to be created
+        
+    Returns:
+        JSON string containing the result of the cloning operation
     """
     client = AirtableClient()
     
     try:
-        # Fetch and clone the view structure
         view_data = await client.fetch_and_clone_view(url)
         if "error" in view_data:
             return f"Error fetching view: {view_data['error']}"
 
-        # Create new base with cloned structure
         base_id = await client.create_base(base_name, [view_data["schema"]])
-
-        # Get the first table ID from the new base
         table_id = view_data["schema"]["id"]
-
-        # Insert records
         await client.insert_records(base_id, table_id, view_data["records"])
 
         return {
